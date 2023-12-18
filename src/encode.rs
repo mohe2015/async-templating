@@ -2,20 +2,24 @@ use std::{borrow::Cow, sync::OnceLock};
 
 use regex::{Regex, Captures};
 
+static REGEX_ONCE_LOCK: OnceLock<Regex> = OnceLock::new();
+
+thread_local! {
+    pub static REGEX: &'static regex::Regex = REGEX_ONCE_LOCK.get_or_init(|| Regex::new("[&<]").unwrap());
+}
+
 pub fn encode_element_text<'a, I: Into<Cow<'a, str>>>(input: I) -> Cow<'a, str> {
     // https://html.spec.whatwg.org/dev/syntax.html
     // https://www.php.net/manual/en/function.htmlspecialchars.php
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    let regex = REGEX.get_or_init(|| Regex::new("[&<]").unwrap());
-
+    
     let input = input.into();
-    match regex.replace_all(&input, |captures: &Captures| {
+    match REGEX.with(|regex| regex.replace_all(&input, |captures: &Captures| {
         match captures.get(0).unwrap().as_str() {
             "&" => "&amp;",
             "<" => "&lt;",
             _ => unreachable!(),
         }
-    }) {
+    })) {
         Cow::Borrowed(_) => input,
         Cow::Owned(owned) => Cow::Owned(owned),
     }
