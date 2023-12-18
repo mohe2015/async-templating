@@ -13,6 +13,65 @@ use encode::{encode_element_text, encode_double_quoted_attribute};
 use crate::async_iterator_extension::AsyncIterExt;
 
 #[derive(Debug)]
+pub enum BodyAttribute {
+}
+
+#[derive(Debug)]
+pub enum BodyChild {
+    Text(&'static str)
+}
+
+#[derive(Debug)]
+pub enum Body {
+    Attribute(BodyAttribute),
+    Child(BodyChild)
+}
+
+pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> Cow<'static, str> {
+    yield r#"<body"#.into();
+    let mut inner = pin!(inner);
+    loop {
+        match inner.next().await {
+            Some(Body::Attribute(attr)) => {
+                match attr {
+                    
+                }
+            }
+            Some(Body::Child(child)) => {
+                yield r#">"#.into();
+                match child {
+                    BodyChild::Text(text) => {
+                        yield encode_element_text(text);
+                    },
+                }
+                break;
+            }
+            None => {
+                yield r#">"#.into();
+                break;
+            }
+        }
+    }
+    loop {
+        match inner.next().await {
+            Some(Body::Child(child)) => {
+                // TODO FIXME code duplication
+                match child {
+                    BodyChild::Text(text) => {
+                        yield encode_element_text(text);
+                    },
+                }
+            },
+            Some(Body::Attribute(attr)) => {
+                panic!("unexpected attribute {attr:?}, already started children")
+            }
+            None => break,
+        }
+    }
+    yield r#"</body>"#.into();
+}
+
+#[derive(Debug)]
 pub enum HtmlAttribute {
     Lang(&'static str)
 }
@@ -87,6 +146,12 @@ pub async fn html_main() -> String {
     let mut async_iterator = pin!(html(async gen {
         yield Html::Attribute(HtmlAttribute::Lang("en"));
         yield Html::Child(HtmlChild::Text("test"));
+        let a = body(async gen {
+            yield Body::Child(BodyChild::Text("test"));
+        });
+        while let Some(v) = a.next().await {
+            yield v;
+        }
     }));
     let mut result = String::new();
 
