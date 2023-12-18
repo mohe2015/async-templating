@@ -5,7 +5,8 @@ use regex::{Regex, Captures};
 static REGEX_ONCE_LOCK: OnceLock<Regex> = OnceLock::new();
 
 thread_local! {
-    pub static REGEX: &'static regex::Regex = REGEX_ONCE_LOCK.get_or_init(|| Regex::new("[&<]").unwrap());
+    // unclear whether this is more performance we should test this.
+    pub static REGEX: regex::Regex = REGEX_ONCE_LOCK.get_or_init(|| Regex::new("[&<]").unwrap()).clone();
 }
 
 pub fn encode_element_text<'a, I: Into<Cow<'a, str>>>(input: I) -> Cow<'a, str> {
