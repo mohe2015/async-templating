@@ -19,7 +19,6 @@ pub enum BodyAttribute {
 #[derive(Debug)]
 pub enum BodyChild {
     Text(&'static str),
-    Html(HtmlOutput),
 }
 
 #[derive(Debug)]
@@ -28,8 +27,14 @@ pub enum Body {
     Child(BodyChild)
 }
 
-pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> Cow<'static, str> {
-    yield r#"<body"#.into();
+#[derive(Debug)]
+pub enum BodyOutput {
+    Internal(Cow<'static, str>),
+    Inner(Body),
+}
+
+pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> BodyOutput {
+    yield BodyOutput::Internal(r#"<body"#.into());
     let mut inner = pin!(inner);
     loop {
         match inner.next().await {
@@ -39,16 +44,16 @@ pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> Cow<'static, str>
                 }
             }
             Some(Body::Child(child)) => {
-                yield r#">"#.into();
+                yield BodyOutput::Internal(r#">"#.into());
                 match child {
                     BodyChild::Text(text) => {
-                        yield encode_element_text(text);
+                        yield BodyOutput::Internal(encode_element_text(text));
                     },
                 }
                 break;
             }
             None => {
-                yield r#">"#.into();
+                BodyOutput::Internal(r#">"#.into());
                 break;
             }
         }
@@ -59,7 +64,7 @@ pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> Cow<'static, str>
                 // TODO FIXME code duplication
                 match child {
                     BodyChild::Text(text) => {
-                        yield encode_element_text(text);
+                        yield BodyOutput::Internal(encode_element_text(text));
                     },
                 }
             },
@@ -69,7 +74,7 @@ pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> Cow<'static, str>
             None => break,
         }
     }
-    yield r#"</body>"#.into();
+    yield BodyOutput::Internal(r#"</body>"#.into());
 }
 
 #[derive(Debug)]
@@ -79,7 +84,8 @@ pub enum HtmlAttribute {
 
 #[derive(Debug)]
 pub enum HtmlChild {
-    Text(&'static str)
+    Text(&'static str),
+    Body(BodyOutput),
 }
 
 #[derive(Debug)]
@@ -88,32 +94,44 @@ pub enum Html {
     Child(HtmlChild)
 }
 
-pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> Cow<'static, str> {
-    yield r#"<!DOCTYPE html>"#.into();
-    yield r#"<html"#.into();
+#[derive(Debug)]
+pub enum HtmlOutput {
+    Internal(Cow<'static, str>),
+    Inner(Html),
+    BodyOutput(BodyOutput),
+}
+
+pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> HtmlOutput {
+    yield HtmlOutput::Internal(r#"<!DOCTYPE html>"#.into());
+    yield HtmlOutput::Internal(r#"<html"#.into());
     let mut inner = pin!(inner);
     loop {
         match inner.next().await {
             Some(Html::Attribute(attr)) => {
                 match attr {
                     HtmlAttribute::Lang(lang) => {
-                        yield r#" lang=""#.into();
-                        yield encode_double_quoted_attribute(lang);
-                        yield r#"""#.into();
+                        yield HtmlOutput::Internal(r#" lang=""#.into());
+                        yield HtmlOutput::Internal(encode_double_quoted_attribute(lang));
+                        yield HtmlOutput::Internal(r#"""#.into());
                     },
                 }
             }
             Some(Html::Child(child)) => {
-                yield r#">"#.into();
+                yield HtmlOutput::Internal(r#">"#.into());
                 match child {
                     HtmlChild::Text(text) => {
-                        yield encode_element_text(text);
+                        yield HtmlOutput::Internal(encode_element_text(text));
+                    },
+                    HtmlChild::Body(body) => match body {
+                        BodyChild::Text(text) => {
+                            yield HtmlOutput::BodyOutput(BodyOutput::Internal(encode_element_text(text)));
+                        },
                     },
                 }
                 break;
             }
             None => {
-                yield r#">"#.into();
+                yield HtmlOutput::Internal(r#">"#.into());
                 break;
             }
         }
@@ -124,7 +142,12 @@ pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> Cow<'static, str>
                 // TODO FIXME code duplication
                 match child {
                     HtmlChild::Text(text) => {
-                        yield encode_element_text(text);
+                        yield HtmlOutput::Internal(encode_element_text(text));
+                    },
+                    HtmlChild::Body(body) => match body {
+                        BodyChild::Text(text) => {
+                            yield HtmlOutput::BodyOutput(BodyOutput::Internal(encode_element_text(text)));
+                        },
                     },
                 }
             },
@@ -134,7 +157,7 @@ pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> Cow<'static, str>
             None => break,
         }
     }
-    yield r#"</html>"#.into();
+    yield HtmlOutput::Internal(r#"</html>"#.into());
 }
 
 pub async fn html_main() -> String {
@@ -151,13 +174,13 @@ pub async fn html_main() -> String {
             yield Body::Child(BodyChild::Text("test"));
         });
         while let Some(v) = a.next().await {
-            yield Body::Child(BodyChild::Html(v));
+            yield Html::Child(HtmlChild::Body(v));
         }
     }));
     let mut result = String::new();
 
     while let Some(v) = async_iterator.next().await {
-        result.push_str(&v);
+        result.push_str(v.into());
     }
     result
 }
