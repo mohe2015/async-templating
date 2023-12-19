@@ -16,9 +16,17 @@ use crate::async_iterator_extension::AsyncIterExt;
 pub enum BodyAttribute {
 }
 
-#[derive(Debug)]
+#[derive(Debug, derive_more::From)]
 pub enum BodyChild {
     Text(&'static str),
+}
+
+impl From<BodyChild> for &str {
+    fn from(value: BodyChild) -> Self {
+        match value {
+            BodyChild::Text(v) => v,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -193,6 +201,8 @@ mod tests {
 
     #[test]
     fn it_works() {
+        let test: &str = BodyChild::Text("hi").into();
+
         let mut fut = pin!(html_main());
 
         let waker = Waker::noop();
