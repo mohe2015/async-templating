@@ -51,23 +51,18 @@ impl From<Body> for &str {
     }
 }
 
+/// Values in *SafeOutput must already be correctly escaped.
 #[derive(Debug)]
-pub enum BodyOutput {
-    Internal(Cow<'static, str>),
-    Inner(Body),
-}
+pub struct BodySafeOutput(Cow<'static, str>);
 
-impl From<BodyOutput> for &str {
-    fn from(value: BodyOutput) -> Self {
-        match value {
-            BodyOutput::Internal(v) => &v,
-            BodyOutput::Inner(v) => v.into(),
-        }
+impl From<BodySafeOutput> for &str {
+    fn from(value: BodySafeOutput) -> Self {
+        &value.0
     }
 }
 
-pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> BodyOutput {
-    yield BodyOutput::Internal(r#"<body"#.into());
+pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> BodySafeOutput {
+    yield BodySafeOutput(r#"<body"#.into());
     let mut inner = pin!(inner);
     loop {
         match inner.next().await {
@@ -77,16 +72,16 @@ pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> BodyOutput {
                 }
             }
             Some(Body::Child(child)) => {
-                yield BodyOutput::Internal(r#">"#.into());
+                yield BodySafeOutput(r#">"#.into());
                 match child {
                     BodyChild::Text(text) => {
-                        yield BodyOutput::Internal(encode_element_text(text));
+                        yield BodySafeOutput(encode_element_text(text));
                     },
                 }
                 break;
             }
             None => {
-                BodyOutput::Internal(r#">"#.into());
+                BodySafeOutput(r#">"#.into());
                 break;
             }
         }
@@ -97,7 +92,7 @@ pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> BodyOutput {
                 // TODO FIXME code duplication
                 match child {
                     BodyChild::Text(text) => {
-                        yield BodyOutput::Internal(encode_element_text(text));
+                        yield BodySafeOutput(encode_element_text(text));
                     },
                 }
             },
@@ -107,7 +102,7 @@ pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> BodyOutput {
             None => break,
         }
     }
-    yield BodyOutput::Internal(r#"</body>"#.into());
+    yield BodySafeOutput(r#"</body>"#.into());
 }
 
 #[derive(Debug)]
@@ -126,7 +121,7 @@ impl From<HtmlAttribute> for &str {
 #[derive(Debug)]
 pub enum HtmlChild {
     Text(&'static str),
-    Body(BodyOutput),
+    Body(BodySafeOutput),
 }
 
 impl From<HtmlChild> for &str {
@@ -153,54 +148,43 @@ impl From<Html> for &str {
     }
 }
 
+/// Values in *SafeOutput must already be correctly escaped.
 #[derive(Debug)]
-pub enum HtmlOutput {
-    Internal(Cow<'static, str>),
-    Inner(Html),
-    BodyOutput(BodyOutput),
-}
+pub struct HtmlSafeOutput(Cow<'static, str>);
 
-impl From<HtmlOutput> for &str {
-    fn from(value: HtmlOutput) -> Self {
-        match value {
-            HtmlOutput::Internal(v) => &v,
-            HtmlOutput::Inner(v) => v.into(),
-            HtmlOutput::BodyOutput(v) => v.into(),
-        }
+impl From<HtmlSafeOutput> for &str {
+    fn from(value: HtmlSafeOutput) -> Self {
+        &value.0
     }
 }
 
-pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> HtmlOutput {
-    yield HtmlOutput::Internal(r#"<!DOCTYPE html>"#.into());
-    yield HtmlOutput::Internal(r#"<html"#.into());
+pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> HtmlSafeOutput {
+    yield HtmlSafeOutput(r#"<!DOCTYPE html>"#.into());
+    yield HtmlSafeOutput(r#"<html"#.into());
     let mut inner = pin!(inner);
     loop {
         match inner.next().await {
             Some(Html::Attribute(attr)) => {
                 match attr {
                     HtmlAttribute::Lang(lang) => {
-                        yield HtmlOutput::Internal(r#" lang=""#.into());
-                        yield HtmlOutput::Internal(encode_double_quoted_attribute(lang));
-                        yield HtmlOutput::Internal(r#"""#.into());
+                        yield HtmlSafeOutput(r#" lang=""#.into());
+                        yield HtmlSafeOutput(encode_double_quoted_attribute(lang));
+                        yield HtmlSafeOutput(r#"""#.into());
                     },
                 }
             }
             Some(Html::Child(child)) => {
-                yield HtmlOutput::Internal(r#">"#.into());
+                yield HtmlSafeOutput(r#">"#.into());
                 match child {
                     HtmlChild::Text(text) => {
-                        yield HtmlOutput::Internal(encode_element_text(text));
+                        yield HtmlSafeOutput(encode_element_text(text));
                     },
-                    HtmlChild::Body(body) => match body {
-                        BodyOutput::(text) => {
-                            yield HtmlOutput::BodyOutput(BodyOutput::Internal(encode_element_text(text)));
-                        },
-                    },
+                    HtmlChild::Body(body) => yield HtmlSafeOutput(body.0),
                 }
                 break;
             }
             None => {
-                yield HtmlOutput::Internal(r#">"#.into());
+                yield HtmlSafeOutput(r#">"#.into());
                 break;
             }
         }
@@ -211,13 +195,9 @@ pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> HtmlOutput {
                 // TODO FIXME code duplication
                 match child {
                     HtmlChild::Text(text) => {
-                        yield HtmlOutput::Internal(encode_element_text(text));
+                        yield HtmlSafeOutput(encode_element_text(text));
                     },
-                    HtmlChild::Body(body) => match body {
-                        BodyChild::Text(text) => {
-                            yield HtmlOutput::BodyOutput(BodyOutput::Internal(encode_element_text(text)));
-                        },
-                    },
+                    HtmlChild::Body(body) => yield HtmlSafeOutput(body.0),
                 }
             },
             Some(Html::Attribute(attr)) => {
@@ -226,7 +206,7 @@ pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> HtmlOutput {
             None => break,
         }
     }
-    yield HtmlOutput::Internal(r#"</html>"#.into());
+    yield HtmlSafeOutput(r#"</html>"#.into());
 }
 
 pub async fn html_main() -> String {
