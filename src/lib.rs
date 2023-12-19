@@ -16,6 +16,13 @@ use crate::async_iterator_extension::AsyncIterExt;
 pub enum BodyAttribute {
 }
 
+impl From<BodyAttribute> for &str {
+    fn from(value: BodyAttribute) -> Self {
+        match value {
+        }
+    }
+}
+
 #[derive(Debug, derive_more::From)]
 pub enum BodyChild {
     Text(&'static str),
@@ -24,7 +31,7 @@ pub enum BodyChild {
 impl From<BodyChild> for &str {
     fn from(value: BodyChild) -> Self {
         match value {
-            BodyChild::Text(v) => v,
+            BodyChild::Text(v) => v.into(),
         }
     }
 }
@@ -35,10 +42,28 @@ pub enum Body {
     Child(BodyChild)
 }
 
+impl From<Body> for &str {
+    fn from(value: Body) -> Self {
+        match value {
+            Body::Attribute(v) => v.into(),
+            Body::Child(v) => v.into(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum BodyOutput {
     Internal(Cow<'static, str>),
     Inner(Body),
+}
+
+impl From<BodyOutput> for &str {
+    fn from(value: BodyOutput) -> Self {
+        match value {
+            BodyOutput::Internal(v) => &v,
+            BodyOutput::Inner(v) => v.into(),
+        }
+    }
 }
 
 pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> BodyOutput {
@@ -90,10 +115,27 @@ pub enum HtmlAttribute {
     Lang(&'static str)
 }
 
+impl From<HtmlAttribute> for &str {
+    fn from(value: HtmlAttribute) -> Self {
+        match value {
+            HtmlAttribute::Lang(v) => v.into(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum HtmlChild {
     Text(&'static str),
     Body(BodyOutput),
+}
+
+impl From<HtmlChild> for &str {
+    fn from(value: HtmlChild) -> Self {
+        match value {
+            HtmlChild::Text(v) => v.into(),
+            HtmlChild::Body(v) => v.into(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -102,11 +144,30 @@ pub enum Html {
     Child(HtmlChild)
 }
 
+impl From<Html> for &str {
+    fn from(value: Html) -> Self {
+        match value {
+            Html::Attribute(v) => v.into(),
+            Html::Child(v) => v.into(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum HtmlOutput {
     Internal(Cow<'static, str>),
     Inner(Html),
     BodyOutput(BodyOutput),
+}
+
+impl From<HtmlOutput> for &str {
+    fn from(value: HtmlOutput) -> Self {
+        match value {
+            HtmlOutput::Internal(v) => &v,
+            HtmlOutput::Inner(v) => v.into(),
+            HtmlOutput::BodyOutput(v) => v.into(),
+        }
+    }
 }
 
 pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> HtmlOutput {
@@ -131,7 +192,7 @@ pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> HtmlOutput {
                         yield HtmlOutput::Internal(encode_element_text(text));
                     },
                     HtmlChild::Body(body) => match body {
-                        BodyChild::Text(text) => {
+                        BodyOutput::(text) => {
                             yield HtmlOutput::BodyOutput(BodyOutput::Internal(encode_element_text(text)));
                         },
                     },
