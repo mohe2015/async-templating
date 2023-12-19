@@ -155,10 +155,10 @@ pub async fn html_main() -> String {
     //};
 
     let mut async_iterator = pin!(html(async gen {
-        yield Html::Attribute(HtmlAttribute::Lang("en"));
-        yield Html::Child(HtmlChild::Text("test"));
+        yield Html::Attribute(HtmlAttribute::Lang(r#"en&""#));
+        yield Html::Child(HtmlChild::Text("test&<"));
         let mut body = pin!(body(async gen {
-            yield Body::Child(BodyChild::Text("test"));
+            yield Body::Child(BodyChild::Text("test&<"));
         }));
         while let Some(v) = body.next().await {
             yield Html::Child(HtmlChild::Body(v));
@@ -189,7 +189,7 @@ mod tests {
             match fut.as_mut().poll(ctx) {
                 Poll::Pending => {}
                 Poll::Ready(result) => {
-                    assert_eq!("<!DOCTYPE html><html lang=\"en\">test</html>", result);
+                    assert_eq!("<!DOCTYPE html><html lang=\"en&amp;&quot;\">test&amp;&lt;<body>test&amp;&lt;</body></html>", result);
                     break
                 },
             }
