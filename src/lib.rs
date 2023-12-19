@@ -16,24 +16,9 @@ use crate::async_iterator_extension::AsyncIterExt;
 pub enum BodyAttribute {
 }
 
-impl From<BodyAttribute> for &str {
-    fn from(value: BodyAttribute) -> Self {
-        match value {
-        }
-    }
-}
-
 #[derive(Debug, derive_more::From)]
 pub enum BodyChild {
     Text(&'static str),
-}
-
-impl From<BodyChild> for &str {
-    fn from(value: BodyChild) -> Self {
-        match value {
-            BodyChild::Text(v) => v.into(),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -42,24 +27,9 @@ pub enum Body {
     Child(BodyChild)
 }
 
-impl From<Body> for &str {
-    fn from(value: Body) -> Self {
-        match value {
-            Body::Attribute(v) => v.into(),
-            Body::Child(v) => v.into(),
-        }
-    }
-}
-
 /// Values in *SafeOutput must already be correctly escaped.
 #[derive(Debug)]
 pub struct BodySafeOutput(Cow<'static, str>);
-
-impl From<BodySafeOutput> for &str {
-    fn from(value: BodySafeOutput) -> Self {
-        &value.0
-    }
-}
 
 pub async gen fn body(inner: impl AsyncIterator<Item=Body>) -> BodySafeOutput {
     yield BodySafeOutput(r#"<body"#.into());
@@ -110,27 +80,10 @@ pub enum HtmlAttribute {
     Lang(&'static str)
 }
 
-impl From<HtmlAttribute> for &str {
-    fn from(value: HtmlAttribute) -> Self {
-        match value {
-            HtmlAttribute::Lang(v) => v.into(),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum HtmlChild {
     Text(&'static str),
     Body(BodySafeOutput),
-}
-
-impl From<HtmlChild> for &str {
-    fn from(value: HtmlChild) -> Self {
-        match value {
-            HtmlChild::Text(v) => v.into(),
-            HtmlChild::Body(v) => v.into(),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -139,24 +92,9 @@ pub enum Html {
     Child(HtmlChild)
 }
 
-impl From<Html> for &str {
-    fn from(value: Html) -> Self {
-        match value {
-            Html::Attribute(v) => v.into(),
-            Html::Child(v) => v.into(),
-        }
-    }
-}
-
 /// Values in *SafeOutput must already be correctly escaped.
 #[derive(Debug)]
 pub struct HtmlSafeOutput(Cow<'static, str>);
-
-impl From<HtmlSafeOutput> for &str {
-    fn from(value: HtmlSafeOutput) -> Self {
-        &value.0
-    }
-}
 
 pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> HtmlSafeOutput {
     yield HtmlSafeOutput(r#"<!DOCTYPE html>"#.into());
@@ -219,17 +157,17 @@ pub async fn html_main() -> String {
     let mut async_iterator = pin!(html(async gen {
         yield Html::Attribute(HtmlAttribute::Lang("en"));
         yield Html::Child(HtmlChild::Text("test"));
-        let a = body(async gen {
+        let mut body = pin!(body(async gen {
             yield Body::Child(BodyChild::Text("test"));
-        });
-        while let Some(v) = a.next().await {
+        }));
+        while let Some(v) = body.next().await {
             yield Html::Child(HtmlChild::Body(v));
         }
     }));
     let mut result = String::new();
 
     while let Some(v) = async_iterator.next().await {
-        result.push_str(v.into());
+        result.push_str(&v.0);
     }
     result
 }
@@ -242,8 +180,6 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let test: &str = BodyChild::Text("hi").into();
-
         let mut fut = pin!(html_main());
 
         let waker = Waker::noop();
