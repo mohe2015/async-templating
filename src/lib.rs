@@ -18,7 +18,8 @@ pub enum BodyAttribute {
 
 #[derive(Debug)]
 pub enum BodyChild {
-    Text(&'static str)
+    Text(&'static str),
+    Html(HtmlOutput),
 }
 
 #[derive(Debug)]
@@ -150,7 +151,7 @@ pub async fn html_main() -> String {
             yield Body::Child(BodyChild::Text("test"));
         });
         while let Some(v) = a.next().await {
-            yield v;
+            yield Body::Child(BodyChild::Html(v));
         }
     }));
     let mut result = String::new();
