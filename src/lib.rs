@@ -147,6 +147,14 @@ pub async gen fn html(inner: impl AsyncIterator<Item=Html>) -> HtmlSafeOutput {
     yield HtmlSafeOutput(r#"</html>"#.into());
 }
 
+async fn get_user_language() -> &'static str {
+    r#"en&""#
+}
+
+async fn get_username() -> &'static str {
+    "test&<"
+}
+
 pub async fn html_main() -> String {
     // `async` coroutines are not yet supported
     //let mut coroutine = async || {
@@ -155,10 +163,10 @@ pub async fn html_main() -> String {
     //};
 
     let mut async_iterator = pin!(html(async gen {
-        yield Html::Attribute(HtmlAttribute::Lang(r#"en&""#));
+        yield Html::Attribute(HtmlAttribute::Lang(get_user_language().await));
         yield Html::Child(HtmlChild::Text("test&<"));
         let mut body = pin!(body(async gen {
-            yield Body::Child(BodyChild::Text("test&<"));
+            yield Body::Child(BodyChild::Text(get_username().await));
         }));
         while let Some(v) = body.next().await {
             yield Html::Child(HtmlChild::Body(v));
